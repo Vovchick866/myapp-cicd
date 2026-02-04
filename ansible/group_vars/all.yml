@@ -1,0 +1,7 @@
+---
+timezone: Asia/Omsk
+admin_user: sshuser
+
+mariadb_root_password: "vladimir0806"
+mariadb_user: "sqluser"
+mariadb_password: "sqlpass"

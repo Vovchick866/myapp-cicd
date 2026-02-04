@@ -1,0 +1,46 @@
+name: CI/CD Pipeline
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Update and install Docker
+            dnf update -y -q
+            if ! command -v docker &> /dev/null; then
+              dnf install -y docker docker-compose
+              systemctl start docker
+              systemctl enable docker
+            fi
+            
+            # Copy application
+            APP_DIR="/opt/php-app"
+            SRC_DIR="/root/ansible-project/docker-app"
+            mkdir -p $APP_DIR
+            cp -r $SRC_DIR/* $APP_DIR/
+            cd $APP_DIR
+            
+            # Stop old containers
+            docker-compose down 2>/dev/null || true
+            
+            # Build and start
+            docker build -t php-app:latest .
+            docker-compose up -d
+            
+            # Wait and check
+            sleep 30
+            if curl -f http://localhost:8080 > /dev/null 2>&1; then
+              echo "SUCCESS: http://${{ secrets.HOST }}:8080"
+            else
+              docker-compose logs
+              exit 1
+            fi

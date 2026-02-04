@@ -1,0 +1,65 @@
+---
+- name: Базовая настройка всех хостов
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Установка необходимых пакетов
+      package:
+        name:
+          - curl
+          - wget
+          - git
+          - vim
+          - htop
+        state: present
+    
+    - name: Настройка часового пояса Омск
+      timezone:
+        name: "Asia/Omsk"
+    
+    - name: Настройка безопасности SSH
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?PasswordAuthentication"
+        line: "PasswordAuthentication no"
+
+- name: Установка Docker на хостах приложения
+  hosts: application
+  become: yes
+  
+  tasks:
+    - name: Обновление apt кэша
+      apt:
+        update_cache: yes
+    
+    - name: Установка Docker
+      apt:
+        name: docker.io
+        state: present
+    
+    - name: Установка Docker Compose
+      apt:
+        name: docker-compose
+        state: present
+    
+    - name: Запуск и включение Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+    
+    - name: Добавление пользователя в группу docker
+      user:
+        name: "sshuser"
+        groups: docker
+        append: yes
+    
+    - name: Проверка установки Docker
+      command: docker --version
+      register: docker_result
+      changed_when: false
+    
+    - name: Вывод версии Docker
+      debug:
+        msg: "{{ docker_result.stdout }}"

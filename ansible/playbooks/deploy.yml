@@ -1,0 +1,68 @@
+---
+- name: Deploy Docker application
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Ensure Docker is installed
+      ansible.builtin.package:
+        name:
+          - docker
+          - docker-compose-plugin
+        state: present
+      
+    - name: Start Docker service
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: yes
+        
+    - name: Login to Docker Hub
+      community.docker.docker_login:
+        username: "{{ lookup('env', 'DOCKERHUB_USERNAME') }}"
+        password: "{{ lookup('env', 'DOCKERHUB_TOKEN') }}"
+        state: present
+        
+    - name: Create app directory
+      ansible.builtin.file:
+        path: /opt/myapp
+        state: directory
+        mode: '0755'
+        
+    - name: Copy docker-compose file
+      ansible.builtin.template:
+        src: ../../docker/docker-compose.yml.j2
+        dest: /opt/myapp/docker-compose.yml
+      vars:
+        image_name: "{{ docker_image }}"
+        
+    - name: Stop and remove old containers
+      community.docker.docker_compose:
+        project_src: /opt/myapp
+        state: absent
+        
+    - name: Pull new image
+      community.docker.docker_image:
+        name: "{{ docker_image }}"
+        source: pull
+        
+    - name: Start containers
+      community.docker.docker_compose:
+        project_src: /opt/myapp
+        state: present
+        pull: yes
+        build: no
+        
+    - name: Check application health
+      ansible.builtin.uri:
+        url: "http://localhost:8080/health"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 10
+      delay: 5
+      
+    - name: Cleanup old images
+      community.docker.docker_image_prune:
+        filters:
+          dangling: true
